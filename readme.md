@@ -2,8 +2,6 @@
 
 Una aplicación gráfica para interactuar con proyectos Laravel, inspirada en Tinkerwell. Permite ejecutar código PHP dentro del contexto de una aplicación Laravel, consultar modelos Eloquent y visualizar resultados de manera eficiente.
 
-![Laravel Tinker Tool Screenshot](screenshot.png)
-
 ## Características
 
 - **Ejecución de código PHP**: Ejecuta cualquier código PHP dentro del contexto de tu aplicación Laravel
