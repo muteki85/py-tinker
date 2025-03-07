@@ -25,8 +25,8 @@ Una aplicación gráfica para interactuar con proyectos Laravel. Permite ejecuta
 
 1. Clona este repositorio:
 ```bash
-git clone https://github.com/tuusuario/laravel-tinker-tool.git
-cd laravel-tinker-tool
+git clone https://github.com/muteki85/py-tinker.git
+cd py-tinker
 ```
 
 2. Instala las dependencias:
