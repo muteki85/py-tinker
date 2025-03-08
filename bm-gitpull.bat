@@ -1,4 +1,4 @@
-python main.py
+git pull
 
 pause
 echo Now about to end...

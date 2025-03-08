@@ -341,9 +341,20 @@ class LaravelTinkerApp:
         self.add_to_log(f"---- CÓDIGO ----\n{code}\n--------------", "code")
         
         threading.Thread(target=self._run_tinker, args=(code,), daemon=True).start()
-    
+
     def _run_tinker(self, code):
         try:
+            # Extraer posibles nombres de modelos del código
+            import re
+            model_names = set(re.findall(r'([A-Z][A-Za-z0-9_]*)::', code))
+
+            # Lista de clases que no son modelos y no necesitan importación de App\Models
+            non_model_classes = {'DB', 'Schema', 'Route', 'Auth', 'Storage', 'Config', 'Log', 'Cache', 'View',
+                                 'Response', 'Request'}
+
+            # Filtrar nombres de modelos, excluyendo los que no son modelos
+            model_names = {model for model in model_names if model not in non_model_classes}
+
             # Crear un archivo temporal con el código
             temp_file = os.path.join(self.project_path.get(), 'temp_tinker.php')
             with open(temp_file, 'w', encoding='utf-8') as f:
@@ -353,7 +364,22 @@ class LaravelTinkerApp:
                 f.write("ini_set('display_errors', 1);\n")
                 f.write("ini_set('display_startup_errors', 1);\n")
                 f.write("error_reporting(E_ALL);\n\n")
-                
+
+                # Importar clases comunes de Laravel
+                f.write("use Illuminate\\Support\\Facades\\DB;\n")
+                f.write("use Illuminate\\Support\\Facades\\Schema;\n")
+                f.write("use Illuminate\\Support\\Facades\\Auth;\n")
+                f.write("use Illuminate\\Support\\Facades\\Route;\n")
+                f.write("use Illuminate\\Support\\Facades\\Storage;\n")
+                f.write("use Illuminate\\Support\\Facades\\Cache;\n")
+                f.write("use Illuminate\\Support\\Facades\\Config;\n")
+                f.write("use Illuminate\\Support\\Facades\\Log;\n")
+
+                # Añadir imports automáticos para modelos detectados
+                for model in model_names:
+                    f.write(f"use App\\Models\\{model};\n")
+                f.write("\n")
+
                 # Cargar Laravel
                 f.write("try {\n")
                 f.write("    require __DIR__.'/vendor/autoload.php';\n")
@@ -365,7 +391,7 @@ class LaravelTinkerApp:
                 f.write("    echo \"En archivo: \" . $e->getFile() . \" línea: \" . $e->getLine() . \"\\n\";\n")
                 f.write("    exit(1);\n")
                 f.write("}\n\n")
-                
+
                 # Funciones de ayuda para consultas de modelos
                 f.write("function formatOutput($data) {\n")
                 f.write("    if (is_object($data) && method_exists($data, 'toArray')) {\n")
@@ -378,7 +404,7 @@ class LaravelTinkerApp:
                 f.write("        return var_export($data, true);\n")
                 f.write("    }\n")
                 f.write("}\n\n")
-                
+
                 # Código del usuario dentro de un bloque try-catch
                 f.write("// Código del usuario:\n")
                 f.write("try {\n")
@@ -387,7 +413,7 @@ class LaravelTinkerApp:
                 f.write("    echo \"Error: \" . $e->getMessage() . \"\\n\";\n")
                 f.write("    echo \"En archivo: \" . $e->getFile() . \" línea: \" . $e->getLine() . \"\\n\";\n")
                 f.write("}\n")
-            
+
             # Ejecutar el código con PHP
             process = subprocess.Popen(
                 ['php', temp_file],
@@ -396,16 +422,16 @@ class LaravelTinkerApp:
                 cwd=self.project_path.get(),
                 text=True
             )
-            
+
             stdout, stderr = process.communicate()
-            
+
             # Eliminar el archivo temporal
             if os.path.exists(temp_file):
                 os.remove(temp_file)
-            
+
             # Variable para almacenar datos JSON si se detectan
             json_data = None
-            
+
             # Enviar resultados a la cola
             if stdout:
                 try:
@@ -419,10 +445,10 @@ class LaravelTinkerApp:
                             json_data = json.loads(stdout)
                             formatted_json = json.dumps(json_data, indent=4)
                             self.output_queue.put(("Salida:\n" + formatted_json, "json"))
-                            
+
                             # Almacenar los datos JSON para uso posterior
                             self.last_json_data = json_data
-                            
+
                             # Añadir señal para mostrar el botón de vista de tabla
                             self.output_queue.put(("show_table_button", json_data))
                         except json.JSONDecodeError:
@@ -433,16 +459,16 @@ class LaravelTinkerApp:
                 except Exception as e:
                     # Si hay cualquier error en el procesamiento, mostrar la salida original
                     self.output_queue.put(("Salida (Error de formato):\n" + stdout + f"\n\nError: {str(e)}", "normal"))
-            
+
             if stderr:
                 self.output_queue.put(("Error:\n" + stderr, "error"))
-                
+
             if not stdout and not stderr:
                 self.output_queue.put(("El código se ejecutó correctamente sin salida.", "success"))
-                
+
             # Actualizar estado
             self.output_queue.put(("status", "Ejecución completada."))
-            
+
         except Exception as e:
             self.output_queue.put((f"Error al ejecutar: {str(e)}", "error"))
             self.output_queue.put(("status", "Error en la ejecución."))
@@ -1249,96 +1275,109 @@ class LaravelTinkerApp:
         
         # Registrar en logs
         self.add_to_log("Se mostró información sobre la aplicación", "info")
-        
+
     def transform_code(self, code):
         """
         Transforma el código ingresado por el usuario para adaptarlo automáticamente
         al formato requerido por Tinker.
-        
+
         Transformaciones:
         - ModelName::método() → echo formatOutput(App\\Models\\ModelName::método());
         - App\\ModelName::método() → echo formatOutput(App\\ModelName::método());
-        
+
         Args:
             code (str): Código ingresado por el usuario
-            
+
         Returns:
             str: Código transformado
         """
         try:
             # Eliminar espacios al inicio y final
             code = code.strip()
-            
+
+            # Eliminar punto y coma al final si existe
+            if code.endswith(';'):
+                code = code[:-1]
+
             # Si ya contiene "echo formatOutput", no aplicar transformación
             if "echo formatOutput" in code:
                 return code
-                
+
             # Si ya está formateado con var_dump o dd, devolverlo sin cambios
             if code.startswith("var_dump(") or code.startswith("dd("):
                 return code
-                
+
             # Si es un código generado por consulta de modelo, no transformar
             if "// Consulta al modelo" in code:
                 return code
-                
+
             # Si es un comando de Laravel (como DB::), no lo transformamos
             if code.startswith("DB::") or code.startswith("\\DB::") or code.startswith("Schema::"):
                 # Simplemente añadir echo si no está ya
                 if not code.startswith("echo"):
                     return f"echo formatOutput({code});"
                 return code
-                
+
             # Verificar si es una consulta de modelo simple (Modelo::método())
             # Patrón: palabra::método(args) - sin espacios antes de ::
             model_method_pattern = r'^([A-Za-z0-9_]+)::([A-Za-z0-9_]+\(.*\))(.*)$'
             import re
             match = re.match(model_method_pattern, code)
-            
+
             if match:
                 model_name = match.group(1)
                 method_call = match.group(2)
                 rest_of_code = match.group(3)
-                
+
                 # Si parece ser un nombre de modelo (primera letra mayúscula)
                 if model_name[0].isupper():
                     # Transformar a formato completo con namespace
-                    transformed = f"echo formatOutput(App\\Models\\{model_name}::{method_call});"
-                    
+                    transformed = f"echo formatOutput(App\\Models\\{model_name}::{method_call}{rest_of_code});"
+
                     # Registrar la transformación
                     self.add_to_log(f"Código transformado: {code} → {transformed}", "info")
-                    
+
                     return transformed
-                    
+
             # Verificar si ya tiene namespace App pero sin formatOutput
             namespace_pattern = r'^App\\([A-Za-z0-9_\\]+)::([A-Za-z0-9_]+\(.*\))(.*)$'
             match = re.match(namespace_pattern, code)
-            
+
             if match:
                 namespace = match.group(1)
                 method_call = match.group(2)
                 rest_of_code = match.group(3)
-                
+
                 # Transformar a formato con formatOutput
-                transformed = f"echo formatOutput(App\\{namespace}::{method_call});"
-                
+                transformed = f"echo formatOutput(App\\{namespace}::{method_call}{rest_of_code});"
+
                 # Registrar la transformación
                 self.add_to_log(f"Código transformado: {code} → {transformed}", "info")
-                
+
                 return transformed
-                
+
             # Si no coincide con ningún patrón pero parece código PHP válido
             if "::" in code or "->" in code:
-                # Simplemente envolver en formatOutput
+                # Verificar si el código comienza con un nombre de clase
+                # que podría ser un modelo Eloquent
+                class_pattern = r'^([A-Z][A-Za-z0-9_]*)(::|\->)'
+                class_match = re.match(class_pattern, code)
+                if class_match and "::" in code[:10]:  # Si hay una clase y usa ::
+                    model_name = class_match.group(1)
+                    # Asegurarnos que tenga el namespace completo
+                    if not code.startswith("App\\"):
+                        transformed = f"echo formatOutput(App\\Models\\{code});"
+                        self.add_to_log(f"Código transformado: {code} → {transformed}", "info")
+                        return transformed
+
+                # Si no es una clase o ya tiene namespace, simplemente envolver
                 transformed = f"echo formatOutput({code});"
-                
-                # Registrar la transformación
                 self.add_to_log(f"Código transformado: {code} → {transformed}", "info")
-                
                 return transformed
-                
+
             # Si no coincide con ningún patrón, devolver el código original
             return code
-            
+
         except Exception as e:
             # Si hay algún error en la transformación, devolver el código original
             self.add_to_log(f"Error al transformar código: {str(e)}", "error")
