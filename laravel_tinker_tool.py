@@ -167,6 +167,20 @@ class LaravelTinkerApp:
             command=lambda: self.code_editor.delete(1.0, tk.END), 
             style="warning.TButton"
         ).pack(side=tk.RIGHT)
+
+        ttk.Button(
+            editor_buttons,
+            text="Pegar desde portapapeles",
+            command=self.paste_from_clipboard,
+            style="info.TButton"
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        ttk.Button(
+            editor_buttons,
+            text="Ejecutar",
+            command=self.execute_code,
+            style="success.TButton"
+        ).pack(side=tk.RIGHT, padx=(10, 0))
         
         # Botones para consultas de modelo
         ttk.Separator(editor_buttons, orient=tk.VERTICAL).pack(side=tk.RIGHT, padx=10, fill=tk.Y)
@@ -207,6 +221,32 @@ class LaravelTinkerApp:
         self.status_var.set("Listo")
         status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def paste_from_clipboard(self):
+        """
+        Pega el contenido del portapapeles en el editor de código.
+        """
+        try:
+            # Obtener contenido del portapapeles
+            clipboard_content = self.root.clipboard_get()
+
+            if clipboard_content:
+                # Limpiar el editor actual y pegar el contenido
+                self.code_editor.delete(1.0, tk.END)
+                self.code_editor.insert(tk.END, clipboard_content)
+
+                # Aplicar resaltado de sintaxis
+                self._highlight_syntax()
+
+                # Registrar en log
+                self.add_to_log("Texto pegado desde el portapapeles", "info")
+
+                # Actualizar estado
+                self.status_var.set("Texto pegado desde el portapapeles")
+            else:
+                self.add_to_log("El portapapeles está vacío", "info")
+        except Exception as e:
+            self.add_to_log(f"Error al pegar desde el portapapeles: {str(e)}", "error")
         
     def browse_project(self):
         project_directory = filedialog.askdirectory(title="Selecciona un proyecto Laravel")
