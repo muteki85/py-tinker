@@ -175,7 +175,7 @@ class LaravelTinkerApp:
             style="info.TButton"
         ).pack(side=tk.LEFT, padx=(0, 10))
 
-      
+
         
         # Botones para consultas de modelo
         ttk.Separator(editor_buttons, orient=tk.VERTICAL).pack(side=tk.RIGHT, padx=10, fill=tk.Y)
@@ -219,7 +219,7 @@ class LaravelTinkerApp:
 
     def paste_from_clipboard(self):
         """
-        Pega el contenido del portapapeles en el editor de código.
+        Pega el contenido del portapapeles en el editor de código y lo ejecuta automáticamente.
         """
         try:
             # Obtener contenido del portapapeles
@@ -237,7 +237,10 @@ class LaravelTinkerApp:
                 self.add_to_log("Texto pegado desde el portapapeles", "info")
 
                 # Actualizar estado
-                self.status_var.set("Texto pegado desde el portapapeles")
+                self.status_var.set("Ejecutando código pegado...")
+
+                # Ejecutar el código automáticamente
+                self.execute_code()
             else:
                 self.add_to_log("El portapapeles está vacío", "info")
         except Exception as e:
