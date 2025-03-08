@@ -175,12 +175,7 @@ class LaravelTinkerApp:
             style="info.TButton"
         ).pack(side=tk.LEFT, padx=(0, 10))
 
-        ttk.Button(
-            editor_buttons,
-            text="Ejecutar",
-            command=self.execute_code,
-            style="success.TButton"
-        ).pack(side=tk.RIGHT, padx=(10, 0))
+      
         
         # Botones para consultas de modelo
         ttk.Separator(editor_buttons, orient=tk.VERTICAL).pack(side=tk.RIGHT, padx=10, fill=tk.Y)
